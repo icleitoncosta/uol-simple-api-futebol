@@ -45,6 +45,7 @@ export default async function getJogos(dia) {
             })
             .get();
             if(canais.length > 0) {
+              if(hora) {
                 games.push({
                     campeonato,
                     hora,
@@ -52,6 +53,7 @@ export default async function getJogos(dia) {
                     canais,
                     date: parseDataHoraBR(dia, hora),
                 });
+              }
             }
     });
     games = ordenarPorData(games);
