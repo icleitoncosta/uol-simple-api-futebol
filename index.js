@@ -61,10 +61,12 @@ export default async function getJogos(dia) {
     const el = jogosHoje.first();
     el.find('.match-content').each((i, el) => {
     const campeonato = $(el).find('.match-info > div:first-child').text().trim();
+    const estadio = $(el).find('.match-info > div').eq(1).text().trim();
 
         // Pegando as siglas dos times
         const times = $(el).find('.team-abbr').map((i, t) => $(t).text().trim()).get();
         const hora = $(el).find('.match-info-hora').text().trim();
+        const escudos = $(el).find('.team-brasao img').map((i, t) => $(t).attr('data-src')).get(); 
 
         const canais = $(el)
             .find('.match-footer .container-status .transmitions a')
@@ -78,9 +80,11 @@ export default async function getJogos(dia) {
               if(hora) {
                 games.push({
                     campeonato,
+                    estadio,
                     hora,
                     times,
                     canais,
+                    escudos: escudos.map((i) => i.replace('40x40', '60x60')),
                     date: parseDataHoraBR(dia, hora),
                 });
               }
