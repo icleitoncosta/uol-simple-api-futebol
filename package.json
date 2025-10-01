@@ -1,9 +1,14 @@
 {
   "name": "uol-simple-api-futebol",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Uma API simples que pega os jogos da UOL formatados e retorna",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prepare": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -27,5 +32,10 @@
   "dependencies": {
     "axios": "^1.11.0",
     "cheerio": "^1.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

