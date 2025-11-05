@@ -1,6 +1,6 @@
 {
   "name": "uol-simple-api-futebol",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Uma API simples que pega os jogos da UOL formatados e retorna",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,8 +30,7 @@
   },
   "homepage": "https://github.com/icleitoncosta/uol-simple-api-futebol#readme",
   "dependencies": {
-    "axios": "^1.11.0",
-    "cheerio": "^1.1.2"
+    "axios": "^1.11.0"
   },
   "devDependencies": {
     "@types/node": "^24.6.1",
