@@ -30,7 +30,9 @@
   },
   "homepage": "https://github.com/icleitoncosta/uol-simple-api-futebol#readme",
   "dependencies": {
-    "axios": "^1.11.0"
+    "axios": "^1.11.0",
+    "cheerio": "^1.1.2",
+    "playwright": "^1.56.1"
   },
   "devDependencies": {
     "@types/node": "^24.6.1",
