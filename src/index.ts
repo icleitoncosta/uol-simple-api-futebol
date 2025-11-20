@@ -3,6 +3,8 @@ import process from 'node:process';
 import { Match } from './types/api';
 import { getUOLData } from './uol';
 import { getFutebolNaTVData } from './futebolnatv';
+import dotenv from 'dotenv';
+dotenv.config();
 
 /**
  * Busca e retorna a lista de jogos de futebol do dia especificado.
