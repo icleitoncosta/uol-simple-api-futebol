@@ -129,8 +129,10 @@ function deveIncluirJogo(fixtureData: any): boolean {
   const isChampionsLeagueWomen = league.id === 525; // UEFA Champions League Women
   const isLaLiga = league.id === 140; // LA Liga
   const isLeagueOne = league.id === 61; // League One
+  const isLeague2England = league.id === 40; // League Two England
+  const isNorthIrelandLeague = league.id === 408; // North Ireland League
   
-  return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || isLaLiga || isLeagueOne;
+  return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague;
 }
 
 /**
@@ -224,8 +226,8 @@ function buscarCanaisParaJogo(jogo: Match, jogosUOL: Match[], jogosFutebolNaTV: 
   const canais: Set<string> = new Set();
   
   // Normalizar nomes para comparação
-  const homeNormalizado = jogo.nomeTimes[0].replace(' W', ' (F)').toLowerCase();
-  const awayNormalizado = jogo.nomeTimes[1].replace(' W', ' (F)').toLowerCase();
+  const homeNormalizado = normalizeTimeName(jogo.nomeTimes[0]).toLowerCase();
+  const awayNormalizado = normalizeTimeName(jogo.nomeTimes[1]).toLowerCase();
   
   // Normalizar horário (remover espaços e converter para formato consistente)
   const normalizarHora = (hora: string) => hora.replace(/\s+/g, '').toLowerCase();
@@ -268,10 +270,10 @@ function buscarCanaisParaJogo(jogo: Match, jogosUOL: Match[], jogosFutebolNaTV: 
     if (!jogoFTV.nomeTimes || !Array.isArray(jogoFTV.nomeTimes) || jogoFTV.nomeTimes.length < 2) {
       return; // Pular se não tiver times válidos
     }
-    
     // Garantir que os valores são strings
-    const homeFTVStr = String(jogoFTV.nomeTimes[0] || '').toLowerCase();
-    const awayFTVStr = String(jogoFTV.nomeTimes[1] || '').toLowerCase();
+    const homeFTVStr = String(normalizeTimeName(jogoFTV.nomeTimes[0]) || '').toLowerCase();
+    const awayFTVStr = String(normalizeTimeName(jogoFTV.nomeTimes[1]) || '').toLowerCase();
+
     
     if (!homeFTVStr || !awayFTVStr) {
       return; // Pular se algum time estiver vazio
@@ -338,7 +340,7 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   const cache = carregarCache();
   
   // Verificar se existe cache para esta data
-  if (cache[diaFormatado]) {
+  if (cache[diaFormatado] && process.env.DISABLE_CACHE !== 'true') {
     console.log(`Retornando jogos do cache para ${diaFormatado}...`);
     return cache[diaFormatado];
   }
@@ -526,4 +528,27 @@ function prepareChannelName(channels: string[]): string[] {
   
   // Remover duplicatas
   return [...new Set(processed)];
+}
+
+function normalizeTimeName(nome: string) {
+  return nome.replace(' W', ' (F)')
+  .replace('Paris Saint Germain', 'PSG')
+  .replace('Slavia Praha VFL', 'Slavia Praha')
+  .replace('Slavia Praha Vfl', 'Slavia Praha')
+  .replace('Galatasaray VFL', 'Galatasaray')
+  .replace('Galatasaray Vfl', 'Galatasaray')
+  .replace('Birmingham VFL', 'Galatasaray')
+  .replace('Birmingham Vfl', 'Birmingham')
+  .replace(' U20', ' Sub-20')
+  .replace('América Mineiro', 'América-MG')
+  .split('')
+  .map(char => {
+    // Manter traços, hífens e underlines
+    if (char === '-' || char === '_' || char === '–' || char === '—') {
+      return char;
+    }
+    // Remover acentos usando normalize
+    return char.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  })
+  .join('');
 }
