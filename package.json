@@ -4,11 +4,15 @@
   "description": "Uma API simples que pega os jogos da UOL formatados e retorna",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=20.18.1"
+  },
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "prepare": "npm run build",
+    "postinstall": "npx playwright install chromium",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
