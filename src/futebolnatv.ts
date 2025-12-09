@@ -3,8 +3,44 @@ import { chromium, Browser, Page } from "playwright";
 import { Match } from "./types/api";
 import { parseDataHoraBR, prepareCacheMatchs } from ".";
 
+function getUrlByDate(diaFormatado: string): string {
+  const hoje = new Date();
+  const dia = String(hoje.getDate()).padStart(2, '0');
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const ano = hoje.getFullYear();
+  const hojeFormatado = `${dia}-${mes}-${ano}`;
+  
+  // Calcular amanhã
+  const amanha = new Date(hoje);
+  amanha.setDate(hoje.getDate() + 1);
+  const diaAmanha = String(amanha.getDate()).padStart(2, '0');
+  const mesAmanha = String(amanha.getMonth() + 1).padStart(2, '0');
+  const anoAmanha = amanha.getFullYear();
+  const amanhaFormatado = `${diaAmanha}-${mesAmanha}-${anoAmanha}`;
+  
+  // Calcular ontem
+  const ontem = new Date(hoje);
+  ontem.setDate(hoje.getDate() - 1);
+  const diaOntem = String(ontem.getDate()).padStart(2, '0');
+  const mesOntem = String(ontem.getMonth() + 1).padStart(2, '0');
+  const anoOntem = ontem.getFullYear();
+  const ontemFormatado = `${diaOntem}-${mesOntem}-${anoOntem}`;
+  
+  if (diaFormatado === hojeFormatado) {
+    return `https://www.futebolnatv.com.br/jogos-hoje/`;
+  } else if (diaFormatado === amanhaFormatado) {
+    return `https://www.futebolnatv.com.br/jogos-amanha/`;
+  } else if (diaFormatado === ontemFormatado) {
+    return `https://www.futebolnatv.com.br/jogos-ontem/`;
+  } else {
+    // Se não for hoje, amanhã ou ontem, usar jogos-hoje como padrão
+    return `https://www.futebolnatv.com.br/jogos-hoje/`;
+  }
+}
+
 export async function getFutebolNaTVData(diaFormatado: any): Promise<Match[]> {
-  const url = `https://www.futebolnatv.com.br/jogos-hoje/`;
+  
+  const url = getUrlByDate(diaFormatado);
   
   let browser: Browser | null = null;
   
