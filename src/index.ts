@@ -130,10 +130,12 @@ function deveIncluirJogo(fixtureData: any): boolean {
   const isLaLiga = league.id === 140; // LA Liga
   const isLeagueOne = league.id === 61; // League One
   const isLeague2England = league.id === 40; // League Two England
+  const isEnglandLeagueWomen = league.id === 44; // England League Women
   const isNorthIrelandLeague = league.id === 408; // North Ireland League
   const isIntercontinentalCup = league.id === 1168; // Intercontinental Cup
+  const isUEFAEuropaLeague = league.id === 3; // UEFA Europa League
   
-  return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague || isIntercontinentalCup;
+  return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague || isIntercontinentalCup || isEnglandLeagueWomen || isUEFAEuropaLeague;
 }
 
 /**
