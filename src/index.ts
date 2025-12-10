@@ -524,6 +524,25 @@ function prepareChannelName(channels: string[]): string[] {
       processed.push('Globo');
       return;
     }
+    if (upperChannel === 'HBO MAX') {
+      processed.push('HBO Max');
+      return;
+    }
+    
+    if (upperChannel === 'SPACE') {
+      processed.push('Space');
+      return;
+    }
+    
+    if (upperChannel === 'XSPORTS') {
+      processed.push('XSports');
+      return;
+    }
+    
+    if (upperChannel === 'GE TV') {
+      processed.push('GE TV');
+      return;
+    }
     processed.push(processedChannel);
   });
   
