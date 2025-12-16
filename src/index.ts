@@ -549,6 +549,16 @@ function prepareChannelName(channels: string[]): string[] {
       processed.push('GE TV');
       return;
     }
+    
+    if (upperChannel === 'ESPN BRASIL') {
+      processed.push('ESPN');
+      return;
+    }
+    
+    if (upperChannel === 'PRIME VIDEO') {
+      processed.push('Prime Video');
+      return;
+    }
     processed.push(processedChannel);
   });
   

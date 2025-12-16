@@ -1,6 +1,6 @@
 {
   "name": "uol-simple-api-futebol",
-  "version": "4.3.1",
+  "version": "4.3.2",
   "description": "Uma API simples que pega os jogos da UOL formatados e retorna",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
