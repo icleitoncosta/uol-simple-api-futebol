@@ -134,8 +134,12 @@ function deveIncluirJogo(fixtureData: any): boolean {
   const isNorthIrelandLeague = league.id === 408; // North Ireland League
   const isIntercontinentalCup = league.id === 1168; // Intercontinental Cup
   const isUEFAEuropaLeague = league.id === 3; // UEFA Europa League
+  const isEnglandCup = league.id === 48; // Copa da Liga Inglesa
+  const isKingCupSpain = league.id === 132; // Copa do Rei da Espanha
   
-  return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague || isIntercontinentalCup || isEnglandLeagueWomen || isUEFAEuropaLeague;
+  return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || 
+         isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague || isIntercontinentalCup || 
+         isEnglandLeagueWomen || isUEFAEuropaLeague || isEnglandCup || isKingCupSpain;
 }
 
 /**
