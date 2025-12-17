@@ -97,6 +97,10 @@ async function buscarJogosAPI(dataAPI: string): Promise<any[]> {
   const url = `https://v3.football.api-sports.io/fixtures`;
   const apiKey = process.env.FOOTBALL_API_KEY;
   
+  if (!apiKey) {
+    throw new Error('FOOTBALL_API_KEY não está definida. Crie um arquivo .env na raiz do projeto com: FOOTBALL_API_KEY=sua_chave_aqui');
+  }
+  
   const response = await axios.get(url, {
     params: {
       date: dataAPI,
@@ -135,11 +139,14 @@ function deveIncluirJogo(fixtureData: any): boolean {
   const isIntercontinentalCup = league.id === 1168; // Intercontinental Cup
   const isUEFAEuropaLeague = league.id === 3; // UEFA Europa League
   const isEnglandCup = league.id === 48; // Copa da Liga Inglesa
-  const isKingCupSpain = league.id === 132; // Copa do Rei da Espanha
+  const isKingCupSpain = league.id === 143; // Copa do Rei da Espanha
+  const isSuperCupItaly = league.id === 547; // Super Copa da Itália
+  const isUEFACup = league.id === 848; // UEFA Conference League
   
   return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || 
          isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague || isIntercontinentalCup || 
-         isEnglandLeagueWomen || isUEFAEuropaLeague || isEnglandCup || isKingCupSpain;
+         isEnglandLeagueWomen || isUEFAEuropaLeague || isEnglandCup || isKingCupSpain || isSuperCupItaly ||
+         isUEFACup;
 }
 
 /**
@@ -557,6 +564,11 @@ function prepareChannelName(channels: string[]): string[] {
     
     if (upperChannel === 'PRIME VIDEO') {
       processed.push('Prime Video');
+      return;
+    }
+    
+    if (upperChannel === 'SPORTYNET' || upperChannel === 'YOUTUBE SPORTYNET SPORTYNET') {
+      processed.push('SportyNet');
       return;
     }
     processed.push(processedChannel);
