@@ -385,7 +385,8 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   console.log(`Jogos que acontecem em ${diaFormatado}: ${fixturesNaData.length}`);
   
   // 3. Filtrar por país/liga: Brazil OU league_id 18 OU league_id 4
-  const fixturesFiltrados = fixturesNaData.filter(fixture => deveIncluirJogo(fixture));
+  //const fixturesFiltrados = fixturesNaData.filter(fixture => deveIncluirJogo(fixture)); // Removido verificação dos jogos para colocar qualquer jogo que passe no dia independente de ser relevante ou nao na TV
+  const fixturesFiltrados = fixturesNaData;
   
   if (fixturesFiltrados.length === 0) {
     // Salvar array vazio no cache para evitar requisições futuras
