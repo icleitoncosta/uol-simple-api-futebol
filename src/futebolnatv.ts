@@ -1,7 +1,102 @@
 import * as cheerio from "cheerio";
-import { chromium, Browser, Page } from "playwright";
 import { Match } from "./types/api";
-import { parseDataHoraBR, prepareCacheMatchs } from ".";
+import { parseDataHoraBR } from ".";
+import * as fs from "fs";
+import * as path from "path";
+
+interface LivewireData {
+  token: string;
+  snapshot: string;
+  lazyLoadParam: string;
+  path: string;
+}
+
+function getCookies(): string {
+  try {
+    // Tentar diferentes caminhos possíveis
+    const possiblePaths = [
+      path.join(__dirname, 'cookies.txt'),
+      path.join(process.cwd(), 'src', 'cookies.txt'),
+      path.join(process.cwd(), 'cookies.txt'),
+      'src/cookies.txt',
+      'cookies.txt'
+    ];
+    
+    for (const cookiesPath of possiblePaths) {
+      if (fs.existsSync(cookiesPath)) {
+        const cookies = fs.readFileSync(cookiesPath, 'utf-8').trim();
+        if (cookies) {
+          return cookies;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao ler cookies.txt:', err);
+  }
+  return '';
+}
+
+function extractCookiesFromResponse(response: Response): string {
+  try {
+    const setCookieHeader = response.headers.get('set-cookie');
+    if (!setCookieHeader) return '';
+    
+    const cookies: string[] = [];
+    
+    // Se for array, processar cada um
+    if (Array.isArray(setCookieHeader)) {
+      setCookieHeader.forEach(cookie => {
+        const cookiePart = cookie.split(';')[0].trim();
+        if (cookiePart) {
+          cookies.push(cookiePart);
+        }
+      });
+    } else {
+      // Se for string única, pode ter múltiplos cookies separados por vírgula
+      const cookieStrings = setCookieHeader.split(',').map(c => c.trim());
+      cookieStrings.forEach(cookie => {
+        const cookiePart = cookie.split(';')[0].trim();
+        if (cookiePart) {
+          cookies.push(cookiePart);
+        }
+      });
+    }
+    
+    return cookies.join('; ');
+  } catch (err) {
+    console.warn('Erro ao extrair cookies da resposta:', err);
+    return '';
+  }
+}
+
+function mergeCookies(existingCookies: string, newCookies: string): string {
+  if (!newCookies) return existingCookies;
+  if (!existingCookies) return newCookies;
+  
+  // Criar um mapa para armazenar cookies únicos (por nome)
+  const cookieMap = new Map<string, string>();
+  
+  // Primeiro, adicionar cookies existentes
+  existingCookies.split('; ').forEach(cookie => {
+    const [name, ...valueParts] = cookie.split('=');
+    if (name && valueParts.length > 0) {
+      cookieMap.set(name.trim(), valueParts.join('='));
+    }
+  });
+  
+  // Depois, sobrescrever com cookies novos (prioridade)
+  newCookies.split('; ').forEach(cookie => {
+    const [name, ...valueParts] = cookie.split('=');
+    if (name && valueParts.length > 0) {
+      cookieMap.set(name.trim(), valueParts.join('='));
+    }
+  });
+  
+  // Converter mapa de volta para string
+  return Array.from(cookieMap.entries())
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
 
 function getUrlByDate(diaFormatado: string): string {
   const hoje = new Date();
@@ -38,100 +133,313 @@ function getUrlByDate(diaFormatado: string): string {
   }
 }
 
+function getPathFromUrl(url: string): string {
+  if (url.includes('jogos-hoje')) return 'jogos-hoje';
+  if (url.includes('jogos-amanha')) return 'jogos-amanha';
+  if (url.includes('jogos-ontem')) return 'jogos-ontem';
+  return 'jogos-hoje';
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
+function extractLivewireData(html: string, path: string): LivewireData | null {
+  try {
+    const $ = cheerio.load(html);
+    
+    // Extrair token CSRF - pode estar em vários lugares
+    let token = '';
+    
+    // 1. Tentar extrair do atributo data-csrf do script do Livewire (mais comum)
+    const livewireScript = $('script[data-csrf]');
+    if (livewireScript.length > 0) {
+      token = livewireScript.attr('data-csrf') || '';
+    }
+    
+    // 2. Tentar meta tag
+    if (!token) {
+      const metaToken = $('meta[name="csrf-token"]').attr('content');
+      token = metaToken || '';
+    }
+    
+    // 3. Tentar input hidden
+    if (!token) {
+      const inputToken = $('input[name="_token"]').attr('value');
+      token = inputToken || '';
+    }
+    
+    // 4. Tentar extrair do JavaScript inline ou do window.Livewire
+    if (!token) {
+      const scriptContent = $('script').text();
+      const tokenMatch = scriptContent.match(/['"]_token['"]\s*:\s*['"]([^'"]+)['"]/) ||
+                        scriptContent.match(/window\.Livewire\s*=\s*\{[^}]*_token['"]\s*:\s*['"]([^'"]+)['"]/);
+      if (tokenMatch) {
+        token = tokenMatch[1];
+      }
+    }
+    
+    // 5. Tentar buscar no HTML bruto usando regex (fallback)
+    if (!token) {
+      const dataCsrfMatch = html.match(/data-csrf=["']([^"']+)["']/);
+      if (dataCsrfMatch) {
+        token = dataCsrfMatch[1];
+      }
+    }
+    
+    if (!token) {
+      console.warn('Token CSRF não encontrado');
+      return null;
+    }
+    
+    // Extrair snapshot do wire:snapshot
+    let snapshot = '';
+    const wireSnapshotAttr = $('[wire\\:snapshot]').attr('wire:snapshot');
+    if (wireSnapshotAttr) {
+      snapshot = decodeHtmlEntities(wireSnapshotAttr);
+    }
+    
+    // Se não encontrou no atributo, tentar buscar no HTML bruto
+    if (!snapshot) {
+      const snapshotMatch = html.match(/wire:snapshot="([^"]+)"/);
+      if (snapshotMatch) {
+        snapshot = decodeHtmlEntities(snapshotMatch[1]);
+      }
+    }
+    
+    if (!snapshot) {
+      console.warn('Snapshot não encontrado');
+      return null;
+    }
+    
+    // Extrair o parâmetro do __lazyLoad de x-intersect
+    let lazyLoadParam = '';
+    const xIntersectAttr = $('[x-intersect]').attr('x-intersect');
+    if (xIntersectAttr) {
+      // Procurar por __lazyLoad('...') ou __lazyLoad("...")
+      const lazyLoadMatch = xIntersectAttr.match(/\$wire\.__lazyLoad\(['"]([^'"]+)['"]\)/) ||
+                           xIntersectAttr.match(/__lazyLoad\(['"]([^'"]+)['"]\)/);
+      if (lazyLoadMatch) {
+        lazyLoadParam = decodeHtmlEntities(lazyLoadMatch[1]);
+      }
+    }
+    
+    // Se não encontrou no atributo, tentar buscar no HTML bruto
+    if (!lazyLoadParam) {
+      const lazyLoadMatch = html.match(/x-intersect="[^"]*__lazyLoad\(['"]([^'"]+)['"]\)/);
+      if (lazyLoadMatch) {
+        lazyLoadParam = decodeHtmlEntities(lazyLoadMatch[1]);
+      }
+    }
+    
+    if (!lazyLoadParam) {
+      console.warn('Parâmetro lazyLoad não encontrado');
+      return null;
+    }
+    
+    return {
+      token,
+      snapshot,
+      lazyLoadParam,
+      path
+    };
+  } catch (err: any) {
+    console.error('Erro ao extrair dados do Livewire:', err.message);
+    return null;
+  }
+}
+
+async function fetchLivewireUpdate(livewireData: LivewireData, cookies?: string): Promise<string> {
+  try {
+    const url = 'https://www.futebolnatv.com.br/livewire/update';
+    
+    const payload = {
+      _token: livewireData.token,
+      components: [{
+        snapshot: livewireData.snapshot,
+        updates: {},
+        calls: [{
+          path: "",
+          method: "__lazyLoad",
+          params: [livewireData.lazyLoadParam]
+        }]
+      }]
+    };
+    
+    // Usar cookies passados como parâmetro, ou tentar ler do arquivo
+    const cookiesToUse = cookies || getCookies();
+    const headers: Record<string, string> = {
+      'accept': '*/*',
+      'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'cache-control': 'no-cache',
+      'content-type': 'application/json',
+      'origin': 'https://www.futebolnatv.com.br',
+      'pragma': 'no-cache',
+      'referer': `https://www.futebolnatv.com.br/${livewireData.path}/`,
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
+      'x-livewire': ''
+    };
+    
+    if (cookiesToUse) {
+      headers['cookie'] = cookiesToUse;
+    }
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // A resposta do Livewire pode ter diferentes estruturas
+    // Tentar extrair HTML de várias formas possíveis
+    
+    // 1. Efeitos no primeiro componente (estrutura mais comum)
+    if (data.components && Array.isArray(data.components) && data.components.length > 0) {
+      const firstComponent = data.components[0];
+      
+      // Prioridade 1: effects.html (estrutura mostrada no exemplo)
+      if (firstComponent.effects && firstComponent.effects.html) {
+        // O HTML pode estar como string ou já processado
+        const html = firstComponent.effects.html;
+        return typeof html === 'string' ? html : String(html);
+      }
+      
+      // Prioridade 2: HTML direto no componente
+      if (firstComponent.html) {
+        return typeof firstComponent.html === 'string' 
+          ? firstComponent.html 
+          : String(firstComponent.html);
+      }
+      
+      // Prioridade 3: HTML em snapshot do componente
+      if (firstComponent.snapshot) {
+        try {
+          const snapshotData = typeof firstComponent.snapshot === 'string' 
+            ? JSON.parse(firstComponent.snapshot) 
+            : firstComponent.snapshot;
+          
+          if (snapshotData && snapshotData.html) {
+            return typeof snapshotData.html === 'string' 
+              ? snapshotData.html 
+              : String(snapshotData.html);
+          }
+        } catch (e) {
+          // Ignorar erro de parsing
+        }
+      }
+    }
+    
+    // 2. Efeitos diretos na raiz (menos comum)
+    if (data.effects && data.effects.html) {
+      return typeof data.effects.html === 'string' 
+        ? data.effects.html 
+        : String(data.effects.html);
+    }
+    
+    // 3. Tentar buscar HTML em qualquer lugar da resposta (fallback)
+    // Usar uma busca mais robusta que lida com strings JSON escapadas
+    const jsonString = JSON.stringify(data);
+    
+    // Tentar encontrar "html": seguido de uma string (pode ter quebras de linha)
+    const htmlMatch = jsonString.match(/"html"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
+    if (htmlMatch && htmlMatch[1]) {
+      // Decodificar escapes JSON
+      let html = htmlMatch[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+      
+      // Decodificar entidades HTML
+      html = decodeHtmlEntities(html);
+      return html;
+    }
+    
+    // Se ainda não tiver, retornar string vazia
+    console.warn('HTML não encontrado na resposta do Livewire. Estrutura:', JSON.stringify(data).substring(0, 500));
+    return '';
+  } catch (err: any) {
+    console.error('Erro ao fazer chamada Livewire:', err.message);
+    throw err;
+  }
+}
+
 export async function getFutebolNaTVData(diaFormatado: any): Promise<Match[]> {
-  
   const url = getUrlByDate(diaFormatado);
-  
-  let browser: Browser | null = null;
+  const path = getPathFromUrl(url);
   
   try {
-    // Iniciar o navegador com timeout
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      timeout: 15000 // 15 segundos para iniciar
-    });
-
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      viewport: { width: 1920, height: 1080 },
-      locale: 'pt-BR'
-    });
-
-    const page: Page = await context.newPage();
+    // 1. Fazer fetch na página inicial
+    let cookies = getCookies(); // Começar com cookies do arquivo (fallback)
+    const headers: Record<string, string> = {
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
+      'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+    };
     
-    // Navegar para a página com waitUntil mais permissivo e timeout menor
-    await Promise.race([
-      page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 20000 // 20 segundos
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout ao carregar página')), 25000)
-      )
-    ]).catch((err) => {
-      console.warn('Timeout ou erro ao carregar página, tentando continuar...', err.message);
-    });
-
-    // Aguardar o componente Livewire carregar (com timeouts menores)
-    try {
-      await Promise.race([
-        page.waitForSelector('[wire\\:id]', { timeout: 10000 }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 12000))
-      ]).catch(() => {
-        console.log('Elemento Livewire não encontrado, continuando...');
-      });
-
-      // Aguardar elementos de jogos aparecerem (cards, etc)
-      await Promise.race([
-        page.waitForSelector('.gamecard', { timeout: 10000 }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 12000))
-      ]).catch(() => {
-        console.log('Elementos de jogos podem não estar visíveis ainda');
-      });
-
-      // Aguardar um pouco mais para garantir que o JavaScript terminou de executar
-      await page.waitForTimeout(2000).catch(() => {});
-    } catch (e) {
-      console.warn('Algum timeout ocorreu, mas continuando mesmo assim...');
+    if (cookies) {
+      headers['cookie'] = cookies;
     }
-
-    // Obter o HTML renderizado
-    const html = await page.content().catch(() => '');
     
-    if (browser) {
-      await browser.close().catch(() => {});
-      browser = null;
+    const response = await fetch(url, {
+      headers
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-
+    
+    // Capturar cookies da resposta e mesclar com os existentes
+    const responseCookies = extractCookiesFromResponse(response);
+    if (responseCookies) {
+      cookies = mergeCookies(cookies, responseCookies);
+    }
+    
+    const html = await response.text();
+    
     if (!html) {
       console.warn('Não foi possível obter HTML, retornando array vazio');
       return [];
     }
     
-    // Parsear o HTML com cheerio
-    const $ = cheerio.load(html);
+    // 2. Extrair dados do Livewire do HTML
+    const livewireData = extractLivewireData(html, path);
     
-    // Extrair jogos do HTML renderizado
+    if (!livewireData) {
+      console.warn('Não foi possível extrair dados do Livewire');
+      return [];
+    }
+    
+    // 3. Fazer chamada para /livewire/update (usando cookies atualizados)
+    const livewireHtml = await fetchLivewireUpdate(livewireData, cookies);
+    
+    if (!livewireHtml) {
+      console.warn('Não foi possível obter HTML do Livewire');
+      return [];
+    }
+    
+    // 4. Parsear o HTML retornado e extrair jogos
+    const $ = cheerio.load(livewireHtml);
     const games = parseGamesFromHTML($, $, diaFormatado);
     
     return games;
     
   } catch (err: any) {
     console.error('Erro ao buscar jogos do Futebol na TV:', err.message);
-    
-    // Garantir que o browser seja fechado mesmo em caso de erro
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (e) {
-        // Ignorar erros ao fechar
-      }
-    }
-    
-    // Retornar array vazio em vez de lançar erro
     return [];
   }
 }
@@ -210,11 +518,14 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
     }
     
     // Extrair times - estão em divs com classe "p-3 win" dentro de spans
-    const timesDivs = $gamecard.find('.p-3.win span');
+    // Cada jogo tem 2 divs com classe "p-3 win", cada uma com um span contendo o nome do time
+    const timesDivs = $gamecard.find('.p-3.win');
     const times: string[] = [];
     
     timesDivs.each((i, el) => {
-      const timeTexto = $(el).text().trim();
+      // Pegar o primeiro span dentro de cada div (pode ter outros elementos, mas o nome do time está no primeiro span)
+      const $span = $(el).find('span').first();
+      const timeTexto = $span.text().trim();
       // Remover quebras de linha e espaços extras
       const timeLimpo = timeTexto.replace(/\s+/g, ' ').trim();
       if (timeLimpo && timeLimpo.length > 0) {
@@ -226,39 +537,33 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
       return null; // Precisa ter pelo menos 2 times
     }
     const time1 = times[0];
-    const time2 = times?.[2] ?? times[1];
+    const time2 = times[1];
     
     // Extrair canais - estão em divs com classe "bcmact" dentro de spans com ícone de TV
+    // Formato: <div class="col bcmact ag bord-n"><span class="svg-icon..."><i class="fas fa-tv"></i> CANAL GOAT</span></div>
     const canais: string[] = [];
     $gamecard.find('.bcmact').each((i, el) => {
       const $canalEl = $(el);
-      const $span = $canalEl.find('span');
       
-      // O texto do canal está no span, após o ícone
-      let canalTexto = $span.text().trim();
+      // Pegar todo o texto do elemento (inclui o texto após o ícone)
+      let canalTexto = $canalEl.text().trim();
       
-      // Se não encontrou no span, pegar do elemento inteiro
+      // Se não encontrou, tentar pegar do span
       if (!canalTexto) {
-        canalTexto = $canalEl.text().trim();
+        const $span = $canalEl.find('span');
+        canalTexto = $span.text().trim();
       }
       
-      // Remover o ícone "fa-tv" e outros ícones, pegar apenas o texto do canal
-      // O formato é: "DISNEY+ PREMIUM" ou "SPORTV" etc
-      const canalLimpo = canalTexto
-        .replace(/^\s*/, '')
+      // Remover espaços extras e quebras de linha
+      const canalNormalizado = canalTexto
         .replace(/\s+/g, ' ')
         .trim();
       
-      if (canalLimpo && canalLimpo.length > 0) {
-        // Pode ter badges HTML, remover tags
-        const canalFinal = canalLimpo.replace(/<[^>]*>/g, '').trim();
-        
-        // Remover espaços extras e quebras de linha
-        const canalNormalizado = canalFinal.replace(/\s+/g, ' ').trim();
-        
-        if (canalNormalizado && canalNormalizado.length > 0 && !canais.includes(canalNormalizado)) {
-          canais.push(canalNormalizado);
-        }
+      // Remover tags HTML se houver
+      const canalFinal = canalNormalizado.replace(/<[^>]*>/g, '').trim();
+      
+      if (canalFinal && canalFinal.length > 0 && !canais.includes(canalFinal)) {
+        canais.push(canalFinal);
       }
     });
     
@@ -268,18 +573,28 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
     }
     
     // Extrair escudos (se disponível) - estão nas imagens de ligas/países
+    // As imagens podem usar lazy loading com data-src
     const escudos: string[] = [];
     $gamecard.find('img').each((i, img) => {
-      const src = $(img).attr('src');
-      if (src && (src.includes('ligas') || src.includes('countries') || src.includes('team'))) {
+      // Verificar primeiro data-src (lazy loading), depois src
+      let src = $(img).attr('data-src') || $(img).attr('src');
+      
+      if (src && (src.includes('ligas') || src.includes('countries') || src.includes('team') || src.includes('upload'))) {
+        // Ignorar imagens de placeholder/loading
+        if (src.includes('load.png') || src.includes('placeholder')) {
+          return;
+        }
+        
         const fullUrl = src.startsWith('http') ? src : `https://www.futebolnatv.com.br${src.startsWith('/') ? '' : '/'}${src}`;
-        escudos.push(fullUrl);
+        if (!escudos.includes(fullUrl)) {
+          escudos.push(fullUrl);
+        }
       }
     });
     
-    // Se não encontrou escudos, usar placeholders
-    if (escudos.length < 2) {
-      escudos.push('', '');
+    // Se não encontrou escudos, usar placeholders vazios
+    while (escudos.length < 2) {
+      escudos.push('');
     }
     
     // Estádio não está disponível na estrutura mostrada
