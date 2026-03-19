@@ -568,6 +568,11 @@ function prepareChannelName(channels: string[]): string[] {
       return;
     }
     
+    if (upperChannel === 'AMAZON PRIME') {
+      processed.push('Prime Video');
+      return;
+    }
+    
     if (upperChannel === 'SPORTYNET' || upperChannel === 'YOUTUBE SPORTYNET SPORTYNET') {
       processed.push('SportyNet');
       return;
