@@ -602,6 +602,7 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
     
     return {
       campeonato: campeonato,
+      logoCampeonato: null,
       estadio: estadio,
       hora: hora,
       times: [time1.substring(0, 3).toUpperCase(), time2.substring(0, 3).toUpperCase()],

@@ -9,6 +9,7 @@ export interface UOLMatch {
     championship: {
         name: string;
         editorialName: string;
+        logo?: string;
     };
     date: string;
     hour: string;

@@ -215,6 +215,7 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
 
     return {
       campeonato: league.name || 'Campeonato não informado',
+      logoCampeonato: league.logo || null,
       estadio: venue.name || 'Não informado',
       hora: horaBR,
       times: [siglaHome, siglaAway],
@@ -606,3 +607,7 @@ function normalizeTimeName(nome: string) {
   })
   .join('');
 }
+
+getJogos().then(jogos => {
+  console.log(jogos);
+});

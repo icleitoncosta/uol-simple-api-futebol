@@ -1,5 +1,6 @@
 export interface Match {
     campeonato: string,
+    logoCampeonato: string | null,
     estadio: string,
     hora: string, // 21h30
     times: string[], // [ 'SAN', 'GRE' ]

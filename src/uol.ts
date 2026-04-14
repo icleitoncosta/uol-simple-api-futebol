@@ -67,6 +67,7 @@ export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match
       
       games.push({
         campeonato: match.championship.editorialName || match.championship.name,
+        logoCampeonato: match.championship.logo || null,
         estadio: match.stadium,
         hora: match.hour,
         times: [homeTeam.acronym, awayTeam.acronym],
