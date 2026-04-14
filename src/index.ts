@@ -607,7 +607,3 @@ function normalizeTimeName(nome: string) {
   })
   .join('');
 }
-
-getJogos().then(jogos => {
-  console.log(jogos);
-});
