@@ -127,23 +127,37 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
     }
     const hora = `${horaMatch[1].padStart(2, "0")}h${horaMatch[2]}`;
 
-    const timesDivs = $gamecard
-      .find("div.flex.items-center.justify-between.gap-3 span.truncate")
-      .filter((_, el) => !$(el).text().includes(":"));
+    // O layout novo usa IDs estáveis para os dois times.
+    let time1 = normalizeText(
+      $gamecard.find("div[id^='jogo-card-team-a-'] img[alt]").first().attr("alt") || ""
+    );
+    let time2 = normalizeText(
+      $gamecard.find("div[id^='jogo-card-team-b-'] img[alt]").first().attr("alt") || ""
+    );
 
-    const times: string[] = [];
-    timesDivs.each((i, el) => {
-      const timeLimpo = normalizeText($(el).text());
-      if (timeLimpo && timeLimpo.length > 0) {
-        times.push(timeLimpo);
+    // Fallback para layouts antigos/alternativos.
+    if (!time1 || !time2) {
+      const timesDivs = $gamecard
+        .find("div.flex.items-center.justify-between span.truncate")
+        .filter((_, el) => !$(el).text().includes(":"));
+
+      const times: string[] = [];
+      timesDivs.each((i, el) => {
+        const timeLimpo = normalizeText($(el).text());
+        if (timeLimpo && timeLimpo.length > 0) {
+          times.push(timeLimpo);
+        }
+      });
+
+      if (times.length >= 2) {
+        time1 = times[0];
+        time2 = times[1];
       }
-    });
+    }
 
-    if (times.length < 2) {
+    if (!time1 || !time2) {
       return null;
     }
-    const time1 = times[0];
-    const time2 = times[1];
 
     const canais: string[] = [];
     $gamecard.find("span.hero-tv + span").each((i, el) => {
