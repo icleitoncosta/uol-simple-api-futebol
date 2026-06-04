@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Match } from './types/api';
 import { getUOLData } from './uol';
 import { getFutebolNaTVData } from './futebolnatv';
+import { teamsMatchName, toBrazilianTeamDisplayName, formatCampeonatoName } from './team-name-match';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -142,11 +143,12 @@ function deveIncluirJogo(fixtureData: any): boolean {
   const isKingCupSpain = league.id === 143; // Copa do Rei da Espanha
   const isSuperCupItaly = league.id === 547; // Super Copa da Itália
   const isUEFACup = league.id === 848; // UEFA Conference League
+  const isInternationalFriendly = league.id === 10; // Amistoso Internacional
   
   return isBrazilLeague || isSerieA || isChampionsLeague || isSerieB || isChampionsLeagueWomen || 
          isLaLiga || isLeagueOne || isLeague2England || isNorthIrelandLeague || isIntercontinentalCup || 
          isEnglandLeagueWomen || isUEFAEuropaLeague || isEnglandCup || isKingCupSpain || isSuperCupItaly ||
-         isUEFACup;
+         isUEFACup || isInternationalFriendly;
 }
 
 /**
@@ -207,19 +209,18 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
     const anoBR = dataBR.getFullYear();
     const dataBRFormatada = `${diaBR}-${mesBR}-${anoBR}`;
 
-    // Extrair siglas dos times (primeiras 3 letras, removendo espaços)
-    const nomeHome = teams.home.name.replace(/\s+/g, '');
-    const nomeAway = teams.away.name.replace(/\s+/g, '');
-    const siglaHome = nomeHome.substring(0, 3).toUpperCase();
-    const siglaAway = nomeAway.substring(0, 3).toUpperCase();
+    const nomeHomePt = toBrazilianTeamDisplayName(teams.home.name);
+    const nomeAwayPt = toBrazilianTeamDisplayName(teams.away.name);
+    const siglaHome = nomeHomePt.replace(/\s+/g, '').substring(0, 3).toUpperCase();
+    const siglaAway = nomeAwayPt.replace(/\s+/g, '').substring(0, 3).toUpperCase();
 
     return {
-      campeonato: league.name || 'Campeonato não informado',
+      campeonato: formatCampeonatoName(league.name || 'Campeonato não informado', league.id),
       logoCampeonato: league.logo || null,
       estadio: venue.name || 'Não informado',
       hora: horaBR,
       times: [siglaHome, siglaAway],
-      nomeTimes: [teams.home.name.replace(' W', ' (F)'), teams.away.name.replace(' W', ' (F)')],
+      nomeTimes: [nomeHomePt, nomeAwayPt],
       canais: [], // Será preenchido depois
       escudos: [
         teams.home.logo || '',
@@ -237,109 +238,53 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
  * Busca canais para um jogo específico a partir de listas pré-buscadas
  * Compara por nome dos times E horário
  */
+function horariosCombinam(horaA: string, horaB: string): boolean {
+  const normalizarHora = (hora: string) => hora.replace(/\s+/g, '').toLowerCase();
+  const hA = normalizarHora(horaA);
+  const hB = normalizarHora(horaB);
+  return (
+    hA === hB ||
+    Math.abs(parseInt(hA.replace('h', ''), 10) - parseInt(hB.replace('h', ''), 10)) <= 1
+  );
+}
+
+function jogoTVCombinaComFixture(jogo: Match, jogoTV: Match, horaFixture: string): boolean {
+  if (!jogoTV.nomeTimes || !Array.isArray(jogoTV.nomeTimes) || jogoTV.nomeTimes.length < 2) {
+    return false;
+  }
+  const homeTV = String(jogoTV.nomeTimes[0] || '');
+  const awayTV = String(jogoTV.nomeTimes[1] || '');
+  if (!homeTV || !awayTV) {
+    return false;
+  }
+  const homeApi = normalizeTimeName(jogo.nomeTimes[0]);
+  const awayApi = normalizeTimeName(jogo.nomeTimes[1]);
+  return (
+    teamsMatchName(homeApi, homeTV) &&
+    teamsMatchName(awayApi, awayTV) &&
+    horariosCombinam(horaFixture, jogoTV.hora)
+  );
+}
+
 function buscarCanaisParaJogo(jogo: Match, jogosUOL: Match[], jogosFutebolNaTV: Match[]): string[] {
   const canais: Set<string> = new Set();
-  
-  // Normalizar nomes para comparação
-  const homeNormalizado = normalizeTimeName(jogo.nomeTimes[0]).toLowerCase();
-  const awayNormalizado = normalizeTimeName(jogo.nomeTimes[1]).toLowerCase();
-  
-  // Normalizar horário (remover espaços e converter para formato consistente)
-  const normalizarHora = (hora: string) => hora.replace(/\s+/g, '').toLowerCase();
-  const horaNormalizada = normalizarHora(jogo.hora);
-  
-  // Procurar no UOL (comparar times E horário)
-  jogosUOL.forEach((jogoUOL) => {
-    // Verificar se nomeTimes existe e tem pelo menos 2 elementos
-    if (!jogoUOL.nomeTimes || !Array.isArray(jogoUOL.nomeTimes) || jogoUOL.nomeTimes.length < 2) {
-      return; // Pular se não tiver times válidos
-    }
-    
-    // Garantir que os valores são strings
-    const homeUOLStr = String(jogoUOL.nomeTimes[0] || '').toLowerCase();
-    const awayUOLStr = String(jogoUOL.nomeTimes[1] || '').toLowerCase();
-    
-    if (!homeUOLStr || !awayUOLStr) {
-      return; // Pular se algum time estiver vazio
-    }
-    
-    const homeUOL = removeAcentos(homeUOLStr);
-    const awayUOL = removeAcentos(awayUOLStr);
-    
-    const horaUOL = normalizarHora(jogoUOL.hora);
-    
-    const matchHome = homeUOL.includes(homeNormalizado) || homeNormalizado.includes(homeUOL);
-    const matchAway = awayUOL.includes(awayNormalizado) || awayNormalizado.includes(awayUOL);
-    const matchHora = horaUOL === horaNormalizada || 
-                      Math.abs(parseInt(horaUOL.replace('h', '')) - parseInt(horaNormalizada.replace('h', ''))) <= 1;
-    
-    if ((matchHome && matchAway) && matchHora) {
-      const channelsNames = prepareChannelName(jogoUOL.canais);
-      channelsNames.forEach(canal => canais.add(canal));
-    }
-  });
-  
-  // Procurar no Futebol na TV (comparar times E horário)
-  jogosFutebolNaTV.forEach((jogoFTV) => {
-    // Verificar se nomeTimes existe e tem pelo menos 2 elementos
-    if (!jogoFTV.nomeTimes || !Array.isArray(jogoFTV.nomeTimes) || jogoFTV.nomeTimes.length < 2) {
-      return; // Pular se não tiver times válidos
-    }
-    // Garantir que os valores são strings
-    const homeFTVStr = String(normalizeTimeName(jogoFTV.nomeTimes[0]) || '').toLowerCase();
-    const awayFTVStr = String(normalizeTimeName(jogoFTV.nomeTimes[1]) || '').toLowerCase();
 
-    
-    if (!homeFTVStr || !awayFTVStr) {
-      return; // Pular se algum time estiver vazio
+  const adicionarCanais = (fonte: Match) => {
+    prepareChannelName(fonte.canais).forEach((canal) => canais.add(canal));
+  };
+
+  for (const jogoUOL of jogosUOL) {
+    if (jogoTVCombinaComFixture(jogo, jogoUOL, jogo.hora)) {
+      adicionarCanais(jogoUOL);
     }
-    
-    const homeFTV = removeAcentos(homeFTVStr);
-    const awayFTV = removeAcentos(awayFTVStr);
-    const horaFTV = normalizarHora(jogoFTV.hora);
-    
-    const matchHome = homeFTV.includes(homeNormalizado) || homeNormalizado.includes(homeFTV);
-    const matchAway = awayFTV.includes(awayNormalizado) || awayNormalizado.includes(awayFTV);
-    const matchHora = horaFTV === horaNormalizada || 
-                      Math.abs(parseInt(horaFTV.replace('h', '')) - parseInt(horaNormalizada.replace('h', ''))) <= 1;
-    
-    if ((matchHome && matchAway) && matchHora) {
-      const channelsNames = prepareChannelName(jogoFTV.canais);
-      channelsNames.forEach(canal => canais.add(canal));
+  }
+
+  for (const jogoFTV of jogosFutebolNaTV) {
+    if (jogoTVCombinaComFixture(jogo, jogoFTV, jogo.hora)) {
+      adicionarCanais(jogoFTV);
     }
-  });
-  
-  // Procurar no UOL (comparar times E horário)
-  jogosUOL.forEach((jogoUOL) => {
-    // Verificar se nomeTimes existe e tem pelo menos 2 elementos
-    if (!jogoUOL.nomeTimes || !Array.isArray(jogoUOL.nomeTimes) || jogoUOL.nomeTimes.length < 2) {
-      return; // Pular se não tiver times válidos
-    }
-    
-    // Garantir que os valores são strings
-    const homeUOLStr = String(jogoUOL.nomeTimes[0] || '').toLowerCase();
-    const awayUOLStr = String(jogoUOL.nomeTimes[1] || '').toLowerCase();
-    
-    if (!homeUOLStr || !awayUOLStr) {
-      return; // Pular se algum time estiver vazio
-    }
-    
-    const homeUOL = removeAcentos(homeUOLStr);
-    const awayUOL = removeAcentos(awayUOLStr);
-    
-    const horaUOL = normalizarHora(jogoUOL.hora);
-    
-    const matchHome = homeUOL.includes(homeNormalizado) || homeNormalizado.includes(homeUOL);
-    const matchAway = awayUOL.includes(awayNormalizado) || awayNormalizado.includes(awayUOL);
-    const matchHora = horaUOL === horaNormalizada || 
-                      Math.abs(parseInt(horaUOL.replace('h', '')) - parseInt(horaNormalizada.replace('h', ''))) <= 1;
-    
-    if ((matchHome && matchAway) && matchHora) {
-      const channelsNames = prepareChannelName(jogoUOL.canais);
-      channelsNames.forEach(canal => canais.add(canal));
-    }
-  });
-  
+  }
+
   return Array.from(canais);
 }
 
