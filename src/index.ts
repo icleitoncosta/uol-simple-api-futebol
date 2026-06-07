@@ -6,6 +6,11 @@ import { Match } from './types/api';
 import { getUOLData } from './uol';
 import { getFutebolNaTVData } from './futebolnatv';
 import { teamsMatchName, toBrazilianTeamDisplayName, formatCampeonatoName } from './team-name-match';
+import {
+  formatBrazilDateDDMMYYYY,
+  formatBrazilHora,
+  getBrazilTodayDDMMYYYY,
+} from './brazil-time';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -29,11 +34,7 @@ dotenv.config();
  */
 
 function getDataAtualFormatada() {
-  const hoje = new Date();
-  const dia = String(hoje.getDate()).padStart(2, '0');
-  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-  const ano = hoje.getFullYear();
-  return `${dia}-${mes}-${ano}`;
+  return getBrazilTodayDDMMYYYY();
 }
 
 export function parseDataHoraBR(dataStr: string, horaStr: string): Date {
@@ -47,7 +48,8 @@ export function parseDataHoraBR(dataStr: string, horaStr: string): Date {
   const horas = parseInt(horaMatch[1], 10);
   const minutos = horaMatch[2] ? parseInt(horaMatch[2], 10) : 0;
 
-  return new Date(ano, mes - 1, dia, horas, minutos);
+  const iso = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:00-03:00`;
+  return new Date(iso);
 }
 
 function ordenarPorData(jogos: Match[]): Match[] {
@@ -156,25 +158,14 @@ function deveIncluirJogo(fixtureData: any): boolean {
  */
 function aconteceNaData(fixtureData: any, diaFormatado: string): boolean {
   try {
-    // A nova API já filtra por data, mas vamos verificar mesmo assim
     const fixture = fixtureData.fixture || {};
     const dateStr = fixture.date;
-    
+
     if (!dateStr) {
       return false;
     }
 
-    // Parse da data no formato ISO (já está em timezone America/Sao_Paulo)
-    const dataBR = new Date(dateStr);
-    
-    // Formatar data brasileira
-    const diaBR = String(dataBR.getDate()).padStart(2, '0');
-    const mesBR = String(dataBR.getMonth() + 1).padStart(2, '0');
-    const anoBR = dataBR.getFullYear();
-    const dataBRFormatada = `${diaBR}-${mesBR}-${anoBR}`;
-    
-    // Verificar se a data do jogo corresponde à data solicitada
-    return dataBRFormatada === diaFormatado;
+    return formatBrazilDateDDMMYYYY(new Date(dateStr)) === diaFormatado;
   } catch (err) {
     return false;
   }
@@ -200,14 +191,9 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
       return null;
     }
 
-    const dataBR = new Date(dateStr);
-    
-    const horaBR = `${String(dataBR.getHours()).padStart(2, '0')}h${String(dataBR.getMinutes()).padStart(2, '0')}`;
-    
-    const diaBR = String(dataBR.getDate()).padStart(2, '0');
-    const mesBR = String(dataBR.getMonth() + 1).padStart(2, '0');
-    const anoBR = dataBR.getFullYear();
-    const dataBRFormatada = `${diaBR}-${mesBR}-${anoBR}`;
+    const fixtureDate = new Date(dateStr);
+    const horaBR = formatBrazilHora(fixtureDate);
+    const dataBRFormatada = formatBrazilDateDDMMYYYY(fixtureDate);
 
     const nomeHomePt = toBrazilianTeamDisplayName(teams.home.name);
     const nomeAwayPt = toBrazilianTeamDisplayName(teams.away.name);
