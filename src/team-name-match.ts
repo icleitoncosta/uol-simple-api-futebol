@@ -13,6 +13,8 @@ function normalizeLookupKey(name: string): string {
     .replace(/\s+sub-20\s*/gi, " ")
     .replace(/\s+u20\s*/gi, " ")
     .replace(/\s+w\s*$/gi, "")
+    .replace(/\s*&\s*/g, " and ")
+    .replace(/\s+e\s+/g, " and ")
     .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -281,6 +283,7 @@ const LEAGUE_NAME_PT: Record<string, string> = {
 };
 
 const LEAGUE_ID_PT: Record<number, string> = {
+  1: "Copa do Mundo",
   10: "Amistoso Internacional",
 };
 
