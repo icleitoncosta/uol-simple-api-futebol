@@ -20,6 +20,7 @@ export interface UOLMatch {
             name: string;
             url?: string;
         }>;
+        highlight?: boolean;
     };
 }
 

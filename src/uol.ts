@@ -78,6 +78,7 @@ export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match
           getEscudoUrl(awayTeam.slug)
         ],
         date: parseDataHoraBR(diaFormatado, match.hour),
+        destaque: match.content.highlight === true,
       });
     });
 

@@ -8,4 +8,5 @@ export interface Match {
     canais: string[], // [ 'SporTV', 'Premiere' ]
     escudos: string[], // [ 'url1', 'url2' ]
     date: Date,
+    destaque: boolean,
 }
