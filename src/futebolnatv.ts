@@ -44,6 +44,16 @@ function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+function resolveChannelName(mainChannel: string, subChannel: string): string {
+  if (mainChannel.toUpperCase() === "YOUTUBE") {
+    const match = subChannel.match(/^\((.+)\)$/);
+    if (match) {
+      return normalizeText(match[1]);
+    }
+  }
+  return mainChannel;
+}
+
 export async function getFutebolNaTVData(diaFormatado: any): Promise<Match[]> {
   const url = getUrlByDate(diaFormatado);
 
@@ -143,9 +153,15 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
     }
 
     const canais: string[] = [];
-    $gamecard.find("span.hero-tv + span").each((i, el) => {
-      const canalFinal = normalizeText($(el).text());
-      if (canalFinal && canalFinal.length > 0 && !canais.includes(canalFinal)) {
+    $gamecard.find("span.hero-tv").each((_, el) => {
+      const $heroTv = $(el);
+      const canalPrincipal = normalizeText($heroTv.next("span").text());
+      if (!canalPrincipal) {
+        return;
+      }
+      const canalSecundario = normalizeText($heroTv.next("span").next("span").text());
+      const canalFinal = resolveChannelName(canalPrincipal, canalSecundario);
+      if (canalFinal && !canais.includes(canalFinal)) {
         canais.push(canalFinal);
       }
     });
@@ -186,7 +202,8 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
       nomeTimes: [time1, time2],
       canais: canais,
       escudos: escudos,
-      date: parseDataHoraBR(diaFormatado, hora)
+      date: parseDataHoraBR(diaFormatado, hora),
+      destaque: false,
     };
   } catch (err) {
     console.warn("Erro ao extrair jogo do gamecard:", err);
