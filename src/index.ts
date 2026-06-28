@@ -213,6 +213,7 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
         teams.away.logo || ''
       ],
       date: parseDataHoraBR(dataBRFormatada, horaBR),
+      destaque: false,
     };
   } catch (err) {
     console.warn('Erro ao converter fixture para Match:', err);
@@ -274,6 +275,15 @@ function buscarCanaisParaJogo(jogo: Match, jogosUOL: Match[], jogosFutebolNaTV: 
   return Array.from(canais);
 }
 
+function buscarDestaqueParaJogo(jogo: Match, jogosUOL: Match[]): boolean {
+  for (const jogoUOL of jogosUOL) {
+    if (jogoTVCombinaComFixture(jogo, jogoUOL, jogo.hora) && jogoUOL.destaque) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export default async function getJogos(dia: string | null = null): Promise<Match[]> {
   if (typeof dia !== 'string' || !/^\d{2}-\d{2}-\d{4}$/.test(dia) && dia !== null) {
     console.warn("Data inválida. Usando data atual.");
@@ -288,7 +298,10 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   // Verificar se existe cache para esta data
   if (cache[diaFormatado] && process.env.DISABLE_CACHE !== 'true') {
     console.log(`Retornando jogos do cache para ${diaFormatado}...`);
-    return cache[diaFormatado];
+    return cache[diaFormatado].map((jogo) => ({
+      ...jogo,
+      destaque: Boolean(jogo.destaque),
+    }));
   }
   
   console.log(`Buscando jogos para ${diaFormatado}...`);
@@ -375,6 +388,7 @@ export default async function getJogos(dia: string | null = null): Promise<Match
           });
         }
         jogo.canais = allCanais;
+        jogo.destaque = buscarDestaqueParaJogo(jogo, jogosUOL);
         
         // Apenas adicionar se tiver canais (seguindo padrão do UOL)
         if (allCanais.length > 0) {
@@ -432,6 +446,10 @@ function prepareChannelName(channels: string[]): string[] {
       return;
     }
     if (upperChannel === 'CAZÉ TV') {
+      processed.push('CazéTV');
+      return;
+    }
+    if (upperChannel === 'CAZÉTV') {
       processed.push('CazéTV');
       return;
     }
@@ -507,6 +525,38 @@ function prepareChannelName(channels: string[]): string[] {
     
     if (upperChannel === 'SPORTYNET' || upperChannel === 'YOUTUBE SPORTYNET SPORTYNET') {
       processed.push('SportyNet');
+      return;
+    }
+    
+    if (upperChannel === 'SPORTYNET' || upperChannel === 'YOUTUBE SPORTYNET SPORTYNET') {
+      processed.push('SportyNet');
+      return;
+    }
+    
+    if (upperChannel === 'NSSPORTS' || upperChannel === 'NSPORTS') {
+      processed.push('NSports');
+      return;
+    }
+    
+    if (upperChannel === 'GLOBO SBT NSSPORTS') {
+      processed.push('Globo');
+      processed.push('SBT');
+      processed.push('NSports');
+      return;
+    }
+    
+    if (upperChannel === 'METROPOLES' || upperChannel === 'METRÓPOLES') {
+      processed.push('Metrópoles');
+      return;
+    }
+    
+    if (upperChannel === 'PAULISTÃO' || upperChannel === 'PAULISTAO') {
+      processed.push('Paulistão');
+      return;
+    }
+
+    // Esses canais que são do Youtube, não são relevantes, removemos eles da lista
+    if(upperChannel === 'ENERGIA 97 FM' || upperChannel === 'ULISSES TV') {
       return;
     }
     processed.push(processedChannel);
