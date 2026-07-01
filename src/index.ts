@@ -543,7 +543,7 @@ function prepareChannelName(channels: string[]): string[] {
       return;
     }
     
-    if (upperChannel === 'GLOBO SBT NSSPORTS') {
+    if (upperChannel === 'GLOBO SBT NSSPORTS' || upperChannel === 'GLOBO SBT NSPORTS') {
       processed.push('Globo');
       processed.push('SBT');
       processed.push('NSports');
@@ -581,7 +581,7 @@ function normalizeTimeName(nome: string) {
   .replace('Birmingham VFL', 'Galatasaray')
   .replace('Birmingham Vfl', 'Birmingham')
   .replace(' U20', ' Sub-20')
-  .replace('América Mineiro', 'América-MG')
+  .replace(/Am[eé]rica Mineiro/gi, 'América-MG')
   .split('')
   .map(char => {
     // Manter traços, hífens e underlines
