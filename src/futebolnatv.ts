@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { Match } from "./types/api";
 import { parseDataHoraBR } from ".";
 import { addDaysToBrazilDate, getBrazilTodayDDMMYYYY } from "./brazil-time";
+import { isFemininoFromMatchInfo, isSub20FromMatchInfo } from "./match-flags";
 
 function getUrlByDate(diaFormatado: string): string {
   const hojeFormatado = getBrazilTodayDDMMYYYY();
@@ -193,17 +194,21 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
       escudos.push("");
     }
 
+    const nomeTimes = [time1, time2];
+
     return {
       campeonato: campeonato,
       logoCampeonato: null,
       estadio: "Não informado",
       hora: hora,
       times: [time1.substring(0, 3).toUpperCase(), time2.substring(0, 3).toUpperCase()],
-      nomeTimes: [time1, time2],
+      nomeTimes,
       canais: canais,
       escudos: escudos,
       date: parseDataHoraBR(diaFormatado, hora),
       destaque: false,
+      sub20: isSub20FromMatchInfo(campeonato, nomeTimes),
+      feminino: isFemininoFromMatchInfo(campeonato, nomeTimes),
     };
   } catch (err) {
     console.warn("Erro ao extrair jogo do gamecard:", err);

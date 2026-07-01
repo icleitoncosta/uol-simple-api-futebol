@@ -9,4 +9,6 @@ export interface Match {
     escudos: string[], // [ 'url1', 'url2' ]
     date: Date,
     destaque: boolean,
+    sub20: boolean,
+    feminino: boolean
 }

@@ -2,6 +2,7 @@ import axios from "axios";
 import { UOLMatch, UOLTeam } from "./types/uol";
 import { parseDataHoraBR, prepareCacheMatchs } from ".";
 import { Match } from "./types/api";
+import { isFemininoFromMatchInfo, isSub20FromMatchInfo } from "./match-flags";
 
 export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match[]> {
       // URL da página do UOL
@@ -64,14 +65,16 @@ export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match
       }
       
       const canais = match.content.broadcast.map(b => b.name);
-      
+      const campeonato = match.championship.editorialName || match.championship.name;
+      const nomeTimes = [homeTeam.name, awayTeam.name];
+
       games.push({
-        campeonato: match.championship.editorialName || match.championship.name,
+        campeonato,
         logoCampeonato: match.championship.logo || null,
         estadio: match.stadium,
         hora: match.hour,
         times: [homeTeam.acronym, awayTeam.acronym],
-        nomeTimes: [homeTeam.name, awayTeam.name],
+        nomeTimes,
         canais: canais,
         escudos: [
           getEscudoUrl(homeTeam.slug),
@@ -79,6 +82,8 @@ export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match
         ],
         date: parseDataHoraBR(diaFormatado, match.hour),
         destaque: match.content.highlight === true,
+        sub20: isSub20FromMatchInfo(campeonato, nomeTimes),
+        feminino: isFemininoFromMatchInfo(campeonato, nomeTimes),
       });
     });
 

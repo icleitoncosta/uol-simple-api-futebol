@@ -11,6 +11,7 @@ import {
   formatBrazilHora,
   getBrazilTodayDDMMYYYY,
 } from './brazil-time';
+import { isFemininoFromApiFixture, isSub20FromApiFixture } from './match-flags';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -214,6 +215,8 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
       ],
       date: parseDataHoraBR(dataBRFormatada, horaBR),
       destaque: false,
+      sub20: isSub20FromApiFixture(fixtureData),
+      feminino: isFemininoFromApiFixture(fixtureData),
     };
   } catch (err) {
     console.warn('Erro ao converter fixture para Match:', err);
@@ -301,6 +304,8 @@ export default async function getJogos(dia: string | null = null): Promise<Match
     return cache[diaFormatado].map((jogo) => ({
       ...jogo,
       destaque: Boolean(jogo.destaque),
+      sub20: Boolean(jogo.sub20),
+      feminino: Boolean(jogo.feminino),
     }));
   }
   
