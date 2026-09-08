@@ -75,6 +75,7 @@ export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match
         hora: match.hour,
         times: [homeTeam.acronym, awayTeam.acronym],
         nomeTimes,
+        idFootballApiTimes: [],
         canais: canais,
         escudos: [
           getEscudoUrl(homeTeam.slug),

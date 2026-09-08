@@ -28,6 +28,7 @@ dotenv.config();
  *          - hora: Horário do jogo (ex: "21h30")
  *          - times: Array com as siglas dos times
  *          - nomeTimes: Array com os nomes completos dos times
+ *          - idFootballApiTimes: Array com os ids dos times na api-sports.io
  *          - canais: Array com os canais de transmissão
  *          - escudos: Array com URLs dos escudos dos times
  *          - date: Data/hora do jogo como objeto Date
@@ -208,6 +209,7 @@ function converterAPIParaMatch(fixtureData: any, diaFormatado: string): Match | 
       hora: horaBR,
       times: [siglaHome, siglaAway],
       nomeTimes: [nomeHomePt, nomeAwayPt],
+      idFootballApiTimes: [teams.home.id, teams.away.id],
       canais: [], // Será preenchido depois
       escudos: [
         teams.home.logo || '',
@@ -303,6 +305,7 @@ export default async function getJogos(dia: string | null = null): Promise<Match
     console.log(`Retornando jogos do cache para ${diaFormatado}...`);
     return cache[diaFormatado].map((jogo) => ({
       ...jogo,
+      idFootballApiTimes: jogo.idFootballApiTimes ?? [],
       destaque: Boolean(jogo.destaque),
       sub20: Boolean(jogo.sub20),
       feminino: Boolean(jogo.feminino),

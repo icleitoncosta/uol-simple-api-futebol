@@ -203,6 +203,7 @@ function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheer
       hora: hora,
       times: [time1.substring(0, 3).toUpperCase(), time2.substring(0, 3).toUpperCase()],
       nomeTimes,
+      idFootballApiTimes: [],
       canais: canais,
       escudos: escudos,
       date: parseDataHoraBR(diaFormatado, hora),
