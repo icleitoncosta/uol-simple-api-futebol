@@ -1,6 +1,6 @@
 import axios from "axios";
 import { UOLMatch, UOLTeam } from "./types/uol";
-import { parseDataHoraBR, prepareCacheMatchs } from ".";
+import { parseDataHoraBR } from ".";
 import { Match } from "./types/api";
 import { isFemininoFromMatchInfo, isSub20FromMatchInfo } from "./match-flags";
 
@@ -8,10 +8,6 @@ export async function getUOLData(diaFormatado: any, dataApi: any): Promise<Match
       // URL da página do UOL
   const url = `https://www.uol.com.br/esporte/futebol/central-de-jogos/`;
 
-  try{
-    await prepareCacheMatchs(url);
-  } catch (e) { }
-  
   try {
     const { data: html } = await axios.get(url, {
       headers: {
