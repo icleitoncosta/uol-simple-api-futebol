@@ -11,10 +11,10 @@ export const F1_LOGO = 'https://a.espncdn.com/i/teamlogos/leagues/500/f1.png';
  * ponytail: lista fixa por tipo de sessão; troque aqui se o contrato de TV mudar.
  */
 export const F1_CANAIS: Record<TipoSessao, string[]> = {
-  treino: ['SporTV', 'Globoplay', 'F1 TV'],
-  quali: ['TV Globo', 'SporTV', 'Globoplay', 'F1 TV'],
-  sprint: ['TV Globo', 'SporTV', 'Globoplay', 'F1 TV'],
-  corrida: ['TV Globo', 'SporTV', 'Globoplay', 'F1 TV'],
+  treino: ['SporTV', 'F1 TV'],
+  quali: ['TV Globo', 'SporTV', 'F1 TV'],
+  sprint: ['TV Globo', 'SporTV', 'F1 TV'],
+  corrida: ['TV Globo', 'SporTV', 'F1 TV'],
 };
 
 type InfoSessao = { codigo: string; nome: string; tipo: TipoSessao };

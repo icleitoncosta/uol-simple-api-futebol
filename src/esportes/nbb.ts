@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { httpGet } from './http';
-import { JogoEsporte, LinhaTabela, Tabela } from './tipos';
+import { JogoEsporte, LinhaTabela, Tabela, semGloboplay } from './tipos';
 import { diaEHora, noIntervalo, ordenarPorData, siglaDe } from './util';
 
 const LNB_JOGOS = 'https://lnb.com.br/nbb/tabela-de-jogos/';
@@ -72,7 +72,7 @@ export async function getNbbTemporada(): Promise<JogoLnb[]> {
         $tr.find('td.logo_home_team img').attr('src') || '',
         $tr.find('td.logo_visitor_team img').attr('src') || '',
       ],
-      canais: [...new Set(canais)],
+      canais: semGloboplay([...new Set(canais)]),
       date,
       ...diaEHora(date),
       destaque: false,

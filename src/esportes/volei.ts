@@ -1,5 +1,5 @@
 import { httpGet } from './http';
-import { JogoEsporte, LinhaTabela, Tabela } from './tipos';
+import { JogoEsporte, LinhaTabela, Tabela, semGloboplay } from './tipos';
 import { capitalizar, diaEHora, noIntervalo, ordenarPorData, siglaDe } from './util';
 
 export type GeneroVolei = 'feminino' | 'masculino';
@@ -116,7 +116,7 @@ export async function getSuperligaTemporada(genero: GeneroVolei): Promise<JogoCb
       nomeTimes: [casa.nome, fora.nome],
       idFootballApiTimes: [],
       escudos: [casa.escudo || '', fora.escudo || ''],
-      canais: [...new Set(canais.map((c) => c.trim()).filter(Boolean))],
+      canais: semGloboplay([...new Set(canais.map((c) => c.trim()).filter(Boolean))]),
       date,
       ...diaEHora(date),
       destaque: false,

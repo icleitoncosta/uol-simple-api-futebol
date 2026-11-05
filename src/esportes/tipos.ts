@@ -43,6 +43,12 @@ export interface Sessao {
   canais: string[];
 }
 
+/**
+ * Globoplay não é canal: é o app onde a TV Globo/SporTV também passa. Na arte ele só ocupa espaço
+ * ao lado de quem transmite de verdade, então sai de todos os esportes.
+ */
+export const semGloboplay = (canais: string[]): string[] => canais.filter((c) => !/globo\s*play/i.test(c));
+
 export type UnidadeTabela = 'gols' | 'pontos' | 'sets';
 
 export interface ZonaTabela {

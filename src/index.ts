@@ -3,6 +3,7 @@ import process from 'node:process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Match } from './types/api';
+import { semGloboplay } from './esportes/tipos';
 import { getUOLData } from './uol';
 import { getFutebolNaTVData } from './futebolnatv';
 import { teamsMatchName, toBrazilianTeamDisplayName, formatCampeonatoName } from './team-name-match';
@@ -277,7 +278,7 @@ function buscarCanaisParaJogo(jogo: Match, jogosUOL: Match[], jogosFutebolNaTV: 
     }
   }
 
-  return Array.from(canais);
+  return semGloboplay(Array.from(canais));
 }
 
 function buscarDestaqueParaJogo(jogo: Match, jogosUOL: Match[]): boolean {
