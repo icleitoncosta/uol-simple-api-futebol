@@ -6,11 +6,16 @@ import { Match } from './types/api';
 import { semGloboplay } from './esportes/tipos';
 import { getUOLData } from './uol';
 import { getFutebolNaTVData } from './futebolnatv';
+import { getFolhaData } from './folha';
+import { getPapoDeBolaData } from './papodebola';
+import { getMantosDoFutebolData } from './mantosdofutebol';
+import { getGoalData } from './goal';
 import { teamsMatchName, toBrazilianTeamDisplayName, formatCampeonatoName } from './team-name-match';
 import {
   formatBrazilDateDDMMYYYY,
   formatBrazilHora,
   getBrazilTodayDDMMYYYY,
+  addDaysToBrazilDate,
 } from './brazil-time';
 import { isFemininoFromApiFixture, isSub20FromApiFixture } from './match-flags';
 import dotenv from 'dotenv';
@@ -119,6 +124,15 @@ async function buscarJogosAPI(dataAPI: string): Promise<any[]> {
     timeout: 30000
   });
   
+  // A API responde 200 com { errors: {...}, response: [] } quando o plano não cobre a data.
+  // Isso não é "dia sem jogos": não pode ir para o cache.
+  const erros = response.data?.errors;
+  if (erros && Object.keys(erros).length > 0) {
+    const err: any = new Error(`API esportiva: ${JSON.stringify(erros)}`);
+    err.planoBloqueado = Boolean(erros.plan);
+    throw err;
+  }
+
   // A API retorna { response: [...] }
   return response.data?.response || [];
 }
@@ -245,8 +259,9 @@ function jogoTVCombinaComFixture(jogo: Match, jogoTV: Match, horaFixture: string
   if (!jogoTV.nomeTimes || !Array.isArray(jogoTV.nomeTimes) || jogoTV.nomeTimes.length < 2) {
     return false;
   }
-  const homeTV = String(jogoTV.nomeTimes[0] || '');
-  const awayTV = String(jogoTV.nomeTimes[1] || '');
+  // o nome da TV passa pela mesma normalização do da API (ex.: "Paris Saint-Germain" = PSG)
+  const homeTV = normalizeTimeName(String(jogoTV.nomeTimes[0] || ''));
+  const awayTV = normalizeTimeName(String(jogoTV.nomeTimes[1] || ''));
   if (!homeTV || !awayTV) {
     return false;
   }
@@ -290,6 +305,43 @@ function buscarDestaqueParaJogo(jogo: Match, jogosUOL: Match[]): boolean {
   return false;
 }
 
+/**
+ * Lista de jogos vinda só das fontes de TV (data que a API esportiva não cobre).
+ * Sem escudo, estádio nem ids da API; o mesmo jogo em várias fontes vira um só, com os canais somados.
+ */
+async function jogosSomenteTV(diaFormatado: string): Promise<Match[]> {
+  const hoje = getBrazilTodayDDMMYYYY();
+  // Futebol na TV só tem ontem, hoje e amanhã (qualquer outra data devolve a página de hoje)
+  const ftvCobre = [-1, 0, 1].some((n) => addDaysToBrazilDate(hoje, n) === diaFormatado);
+  const dataApi = diaFormatado.split('-').reverse().join('-');
+  const fontes = await Promise.all([
+    getUOLData(diaFormatado, dataApi).catch(() => [] as Match[]),
+    ftvCobre ? getFutebolNaTVData(diaFormatado).catch(() => [] as Match[]) : Promise.resolve([] as Match[]),
+    getFolhaData(diaFormatado).catch(() => [] as Match[]),
+    getPapoDeBolaData(diaFormatado).catch(() => [] as Match[]),
+    getMantosDoFutebolData(diaFormatado).catch(() => [] as Match[]),
+    getGoalData(diaFormatado).catch(() => [] as Match[]),
+  ]);
+
+  const unicos: Match[] = [];
+  for (const jogo of fontes.flat()) {
+    const igual = unicos.find(
+      (u) =>
+        teamsMatchName(normalizeTimeName(u.nomeTimes[0]), normalizeTimeName(jogo.nomeTimes[0])) &&
+        teamsMatchName(normalizeTimeName(u.nomeTimes[1]), normalizeTimeName(jogo.nomeTimes[1])) &&
+        horariosCombinam(u.hora, jogo.hora)
+    );
+    if (igual) {
+      igual.canais = Array.from(new Set([...igual.canais, ...jogo.canais]));
+      igual.destaque = igual.destaque || jogo.destaque;
+    } else {
+      unicos.push({ ...jogo, canais: [...jogo.canais] });
+    }
+  }
+  for (const jogo of unicos) jogo.canais = semGloboplay(prepareChannelName(jogo.canais));
+  return ordenarPorData(unicos.filter((j) => j.canais.length > 0));
+}
+
 export default async function getJogos(dia: string | null = null): Promise<Match[]> {
   if (typeof dia !== 'string' || !/^\d{2}-\d{2}-\d{4}$/.test(dia) && dia !== null) {
     console.warn("Data inválida. Usando data atual.");
@@ -323,6 +375,9 @@ export default async function getJogos(dia: string | null = null): Promise<Match
   } catch (err: any) {
     console.warn('Erro ao buscar jogos da API esportiva:', err.message);
     // Em caso de erro, não salvar no cache para permitir nova tentativa
+    // Data fora do plano da API (hoje só D-1 a D+1): monta a lista só com as fontes de TV, sem cache,
+    // para o dia ser refeito com a API esportiva assim que ela passar a cobrir.
+    if (err.planoBloqueado) return jogosSomenteTV(diaFormatado);
     return [];
   }
   
@@ -365,6 +420,42 @@ export default async function getJogos(dia: string | null = null): Promise<Match
     jogosUOL = [];
   }
   
+  // Folha: só traz jogos se a página for do dia pedido (ver tituloEhDoDia).
+  let jogosFolha: Match[] = [];
+  // Goal: guia com hoje e os próximos dias (só entra a tabela da data pedida).
+  let jogosGoal: Match[] = [];
+  try {
+    jogosGoal = await getGoalData(diaFormatado);
+    console.log(`Encontrados ${jogosGoal.length} jogos na Goal`);
+  } catch (err: any) {
+    console.warn('Erro ao buscar jogos da Goal, continuando sem eles:', err.message);
+  }
+
+  // Mantos do Futebol: hoje, amanhã e depois (só entra seção com a data pedida).
+  let jogosMantos: Match[] = [];
+  try {
+    jogosMantos = await getMantosDoFutebolData(diaFormatado);
+    console.log(`Encontrados ${jogosMantos.length} jogos no Mantos do Futebol`);
+  } catch (err: any) {
+    console.warn('Erro ao buscar jogos do Mantos do Futebol, continuando sem eles:', err.message);
+  }
+
+  // Papo de Bola: hoje até +6 dias, canais na página de cada jogo.
+  let jogosPapo: Match[] = [];
+  try {
+    jogosPapo = await getPapoDeBolaData(diaFormatado);
+    console.log(`Encontrados ${jogosPapo.length} jogos no Papo de Bola`);
+  } catch (err: any) {
+    console.warn('Erro ao buscar jogos do Papo de Bola, continuando sem eles:', err.message);
+  }
+
+  try {
+    jogosFolha = await getFolhaData(diaFormatado);
+    console.log(`Encontrados ${jogosFolha.length} jogos na Folha`);
+  } catch (err: any) {
+    console.warn('Erro ao buscar jogos da Folha, continuando sem eles:', err.message);
+  }
+
   try {
     jogosFutebolNaTV = await getFutebolNaTVData(diaFormatado);
     console.log(`Encontrados ${jogosFutebolNaTV.length} jogos no Futebol na TV`);
@@ -380,7 +471,7 @@ export default async function getJogos(dia: string | null = null): Promise<Match
       const jogo = converterAPIParaMatch(fixture, diaFormatado);
       if (jogo) {
         // Buscar canais nas listas pré-buscadas (baseado em nome dos times e horário)
-        const canais = buscarCanaisParaJogo(jogo, jogosUOL, jogosFutebolNaTV);
+        const canais = buscarCanaisParaJogo(jogo, jogosUOL, [...jogosFutebolNaTV, ...jogosFolha, ...jogosPapo, ...jogosMantos, ...jogosGoal]);
         
         // Filtrar apenas canais Premiere: se tiver Premiere com número, remover Premiere sem número
         const hasPremiereWithNumber = canais.some(c => /^Premiere\s+\d+$/i.test(c));
@@ -576,7 +667,7 @@ function prepareChannelName(channels: string[]): string[] {
 
 function normalizeTimeName(nome: string) {
   return nome.replace(' W', ' (F)')
-  .replace('Paris Saint Germain', 'PSG')
+  .replace(/Paris Saint[ -]Germain/gi, 'PSG') // a API escreve sem hífen, a Folha com hífen
   .replace('Slavia Praha VFL', 'Slavia Praha')
   .replace('Slavia Praha Vfl', 'Slavia Praha')
   .replace('Galatasaray VFL', 'Galatasaray')

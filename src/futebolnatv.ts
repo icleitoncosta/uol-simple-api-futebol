@@ -89,6 +89,20 @@ export async function getFutebolNaTVData(diaFormatado: any): Promise<Match[]> {
 function parseGamesFromHTML($: cheerio.CheerioAPI, diaFormatado: string): Match[] {
   const games: Match[] = [];
 
+  // Layout atual do site: <article class="match">. O antigo (#fntv-jogos-por-hora) fica de fallback.
+  const novos = $("article.match");
+  if (novos.length > 0) {
+    novos.each((_, element) => {
+      try {
+        const game = extractGameFromMatchCard($, $(element), diaFormatado);
+        if (game) games.push(game);
+      } catch (err) {
+        console.warn("Erro ao processar card do Futebol na TV:", err);
+      }
+    });
+    return games;
+  }
+
   const cards = $("#fntv-jogos-por-hora article");
 
   cards.each((index, element) => {
@@ -104,6 +118,67 @@ function parseGamesFromHTML($: cheerio.CheerioAPI, diaFormatado: string): Match[
   });
 
   return games;
+}
+
+// Hora de Brasília a partir do timestamp (data-ts, em segundos): jogo que ainda não começou não traz o horário em texto.
+function horaBrasilia(ts: number): string {
+  const parts = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(ts * 1000));
+  const h = parts.find((p) => p.type === "hour")?.value || "00";
+  const m = parts.find((p) => p.type === "minute")?.value || "00";
+  return `${h === "24" ? "00" : h}h${m}`;
+}
+
+function extractGameFromMatchCard($: cheerio.CheerioAPI, $card: cheerio.Cheerio<any>, diaFormatado: string): Match | null {
+  const campeonato = normalizeText($card.find(".m-head p b").first().text()) || "Campeonato não informado";
+
+  const ts = Number($card.attr("data-ts"));
+  let hora = Number.isFinite(ts) && ts > 0 ? horaBrasilia(ts) : "";
+  if (!hora) {
+    const m = normalizeText($card.find(".m-time small").first().text()).match(/(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    hora = `${m[1].padStart(2, "0")}h${m[2]}`;
+  }
+
+  const nomes = $card.find(".m-team .m-name").map((_, el) => normalizeText($(el).text())).get();
+  if (nomes.length < 2 || !nomes[0] || !nomes[1]) return null;
+  const [time1, time2] = nomes;
+
+  const canais: string[] = [];
+  $card.find(".m-channels > span").each((_, el) => {
+    const principal = normalizeText($(el).find("b").first().text());
+    if (!principal) return;
+    const secundario = normalizeText($(el).find("small").first().text());
+    const canal = resolveChannelName(principal, secundario);
+    if (canal && !canais.includes(canal)) canais.push(canal);
+  });
+  if (canais.length === 0) return null;
+
+  const escudos: string[] = $card
+    .find("img.m-crest")
+    .map((_, img) => {
+      const src = $(img).attr("src") || "";
+      return src.startsWith("http") ? src : src ? `https://www.futebolnatv.com.br${src.startsWith("/") ? "" : "/"}${src}` : "";
+    })
+    .get()
+    .slice(0, 2) as string[];
+  while (escudos.length < 2) escudos.push("");
+
+  const nomeTimes = [time1, time2];
+  return {
+    campeonato,
+    logoCampeonato: null,
+    estadio: "Não informado",
+    hora,
+    times: [time1.substring(0, 3).toUpperCase(), time2.substring(0, 3).toUpperCase()],
+    nomeTimes,
+    idFootballApiTimes: [],
+    canais,
+    escudos,
+    date: parseDataHoraBR(diaFormatado, hora),
+    destaque: false,
+    sub20: isSub20FromMatchInfo(campeonato, nomeTimes),
+    feminino: isFemininoFromMatchInfo(campeonato, nomeTimes),
+  };
 }
 
 function extractGameFromGamecard($: cheerio.CheerioAPI, $gamecard: cheerio.Cheerio<any>, diaFormatado: string): Match | null {
